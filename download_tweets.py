@@ -2,13 +2,14 @@
 """
 Created on Sun Aug 14 11:32:02 2016
 
-@author: SAMERA
+@author: SAMER AAMAR
 """
 
 #%%
 
 import configparser
 
+CONF_INI_FILE = 'c:/temp/conf.ini'
 
 #conf.ini should look like this (in c:/temp folder)
 #[DEFAULT]
@@ -22,7 +23,7 @@ import configparser
 #mongodb_port = 27017
 
 config = configparser.ConfigParser()
-config.read('c:/temp/conf.ini')
+config.read(CONF_INI_FILE)
 
 default = config['DEFAULT']
 consumer_key = default['consumer_key']
@@ -34,9 +35,8 @@ host = default['mongodb_host']
 port = default['mongodb_port']
 
 
-
-
 #%%
+
 
 import json, tweepy
     
