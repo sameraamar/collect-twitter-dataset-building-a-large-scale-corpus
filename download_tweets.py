@@ -7,10 +7,10 @@ Created on Sun Aug 14 11:32:02 2016
 
 import json, tweepy
 
-consumer_key = "15RlnMoVeVYMZZ7B75atfHoeT"
-consumer_secret = "C92Vv4p4DdeNpTtMMRgCB3SlZ2ZxGqhw3WKjniZluyCQFXbWWd"
-access_key = "743159365381787648-cviHOEuYncAL1DGnkiKx5DW5PkloSbi"
-access_secret = "f6vLHwcF5LJTKbAGoJWhYSAkOnF3m2r9KqPSwgT6QepTQ"
+consumer_key = "15Rln5atfHoeT"
+consumer_secret = "C9CB3SlZ2ZxGqhw3WKjniZluyCQFXbWWd"
+access_key = "743159365381787648-cviHOGnkiKx5DW5PkloSbi"
+access_secret = "f6vLHwcF5LJTKbAGoJWhYSAkOnF3m26QepTQ"
 
 start_line = 0
 
