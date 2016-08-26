@@ -7,8 +7,11 @@ Created on Sun Aug 14 11:32:02 2016
 
 #%%
 
+#%%
+
 import configparser
 
+CONF_INI_FILE = 'c:/temp/conf.ini'
 
 #conf.ini should look like this (in c:/temp folder)
 #[DEFAULT]
@@ -21,26 +24,28 @@ import configparser
 #mongodb_host = localhost
 #mongodb_port = 27017
 
-config = configparser.ConfigParser()
-config.read('c:/temp/conf.ini')
+def load_config(user='DEFAULT'):
+    config = configparser.ConfigParser()
+    config.read(CONF_INI_FILE)
+    
+    
+    default = config['DEFAULT']
+    host = default['mongodb_host']
+    port = int ( default['mongodb_port']  )
+    
+    default = config[user]
+    consumer_key = default['consumer_key']
+    consumer_secret = default['consumer_secret']
+    access_key = default['access_key']
+    access_secret = default['access_secret']
 
-default = config['DEFAULT']
-consumer_key = default['consumer_key']
-consumer_secret = default['consumer_secret']
-access_key = default['access_key']
-access_secret = default['access_secret']
-
-host = default['mongodb_host']
-port = default['mongodb_port']
-
-
-
+    
+    return consumer_key, consumer_secret, access_key, access_secret, host, port
 
 #%%
 
-import json, tweepy
-    
 
+import tweepy
 
 start_line = 0
 
@@ -113,25 +118,34 @@ def get_tweets_bulk(twapi, idlist, dbcollection):
     bulk.execute()
     return len(tweets)
 #%%
-import tweepy
-    
-auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-auth.set_access_token(access_key, access_secret)
-api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
+   
+switch=0
+USERS=[ 'USER1', 'USER2', 'USER3', 'USER4', 'USER5' ]
+errors = [0]*len(USERS)
+apis = [None]*len(USERS)
+
+
+consumer_key, consumer_secret, access_key, access_secret, host, port =load_config(USERS[switch])
+
+if apis[switch] == None:
+    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    auth.set_access_token(access_key, access_secret)
+    #
+    apis[switch] = tweepy.API(auth)
+    #apis[switch] = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
 
 #%%
-from datetime import datetime
 from pymongo import MongoClient
 import time, pymongo
+from tweepy import TweepError, RateLimitError
 
-client = MongoClient()
-client = MongoClient("mongodb://"+host+":"+port)
+client = MongoClient(host, int(port))
+#client = MongoClient("mongodb://"+host+":"+port)
 
 db = client.events2012
 dbcoll = db.posts
 
 
-cTotal = 0
 while True:
     cursor = dbcoll.find({'status':"New"}).sort([('_id', pymongo.ASCENDING)]).limit(100)
     idlist = []
@@ -142,154 +156,50 @@ while True:
         break
     
     try:
-        c = get_tweets_bulk(api, idlist, dbcoll)
+        c = get_tweets_bulk(apis[switch], idlist, dbcoll)
         cLoaded = dbcoll.find({'status': 'Loaded'}).count()
         cErrors = dbcoll.find({'status': 'Error'}).count()
         print('Updated in db - success :', cLoaded, '. Error: ', cErrors)
-    except Exception as e:
-        sec = 0.25*60
-        current_time = datetime.now().time() 
-        print ('[', current_time.isoformat(), '] Going to sleep ', sec/60.0, ' minutes!\nException : ', e)
-        time.sleep(sec)
-        print ('Waking up!')
-        #raise
-
-print ("Finished!")
-
-#%%
-
-reset = False
-if reset:
-    dbcoll.update_many({'status': 'Error'}, {'$set': {'status': 'New'}}) #find({'status': 'Error'})
-#for e in errors:
-#    e.update
-
-
-# -*- coding: utf-8 -*-
-"""
-Created on Sun Aug 14 11:32:02 2016
-
-@author: SAMERA
-"""
-
-import json, tweepy
-
-consumer_key = "15RlnMoVeVYMZZ7B75atfHoeT"
-consumer_secret = "C92Vv4p4DdeNpTtMMRgCB3SlZ2ZxGqhw3WKjniZluyCQFXbWWd"
-access_key = "743159365381787648-cviHOEuYncAL1DGnkiKx5DW5PkloSbi"
-access_secret = "f6vLHwcF5LJTKbAGoJWhYSAkOnF3m2r9KqPSwgT6QepTQ"
-
-start_line = 0
-
-def get_tweet_id(line):
-    '''
-    Extracts and returns tweet ID from a line in the input.
-    '''
-    tw = line.strip().split()[0]
-    #line = str(line).strip()
-    
-    #(tagid,_timestamp,_sandyflag) = line.split('\t')
-    #(_tag, _search, tweet_id) = tagid.split(':')
-    return tw
-
-def get_tweets_single(twapi, idfilepath):
-    '''
-    Fetches content for tweet IDs in a file one at a time,
-    which means a ton of HTTPS requests, so NOT recommended.
-
-    `twapi`: Initialized, authorized API object from Tweepy
-    `idfilepath`: Path to file containing IDs
-    '''
-    # process IDs from the file
-    with open(idfilepath, 'rb') as idfile:
-        for line in idfile:
-            tweet_id = get_tweet_id(line)
-            if tweet_id == '':
-                continue 
+        
+    except (RateLimitError , TweepError ) as e:
+        
+        if (type(e) == TweepError and str(e)[-3:] == '429')         \
+            or isinstance(e, RateLimitError)      \
+           :
+            errors[switch] = time.time()
+            if abs(errors[-1] - errors[0]) < 2:
+                print('Too much failures... go to sleep! ', time.ctime())
+                time.sleep(60*3)
+                errors = [0]*len(USERS)
             
-            print('Fetching tweet for ID %s', tweet_id)
-            try:
-                tweet = twapi.get_status(tweet_id)
-                print('%s,%s' % (tweet_id, tweet.text.encode('UTF-8')))
-            except tweepy.TweepError as te:
-                print('Failed to get tweet ID %s: %s', tweet_id, te.message)
-                # traceback.print_exc(file=sys.stderr)
-        # for
-    # with
+            print('.', end="")
+            # need to implement a fallback plan (use a different user)
+            switch = (switch+1) % len(USERS)
+            
+            
+            if apis[switch] == None:            
+                consumer_key, consumer_secret, access_key, access_secret, host, port =load_config(USERS[switch])
+            
+                auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+                auth.set_access_token(access_key, access_secret)
+                #
+                apis[switch] = tweepy.API(auth)
+                
 
-def get_tweet_list(twapi, idlist):
-    '''
-    Invokes bulk lookup method.
-    Raises an exception if rate limit is exceeded.
-    '''
-    # fetch as little metadata as possible
-    tweets = twapi.statuses_lookup(id_=idlist, include_entities=True, trim_user=False)
+        else:
+            print (e)
+            raise
+            
     
-    return tweets
-    #for tweet in tweets:
-    #    print('%s,%s' % (tweet.id, tweet.text.encode('UTF-8')))
 
-def get_tweets_bulk(twapi, idlist, dbcollection):
-    if len(idlist)==0:
-        return 
-        
-    bulk = dbcollection.initialize_unordered_bulk_op()
-    tweets = get_tweet_list(twapi, idlist)
-    
-    for t in idlist:
-        t = int(t)
-        bulk.find({'_id': t}).update({'$set': {'status': 'Error'}})
-        
-    for t in tweets:
-        #j = json.dumps(t._json)
-        j = t._json
-        tid = j['id']
-        bulk.find({'_id': tid}).update({'$set': {'json': j, 'status': 'Loaded'}})
-        #bulk.find({'_id': tid}).update({'$set': {'status': 'Loaded'}})
-    
-    bulk.execute()
-    return len(tweets)
-#%%
-import tweepy
-    
-auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-auth.set_access_token(access_key, access_secret)
-api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
-
-#%%
-from datetime import datetime
-from pymongo import MongoClient
-import time, pymongo
-
-client = MongoClient()
-client = MongoClient("mongodb://localhost:27017")
-
-db = client.events2012
-dbcoll = db.posts
-
-
-cTotal = 0
-while True:
-    cursor = dbcoll.find({'status':"New"}).sort([('_id', pymongo.ASCENDING)]).limit(100)
-    idlist = []
-    for c in cursor:
-        idlist.append( c['_id'])
-        
-    if len(idlist) == 0:
-        break
-    
-    try:
-        c = get_tweets_bulk(api, idlist, dbcoll)
-        cLoaded = dbcoll.find({'status': 'Loaded'}).count()
-        cErrors = dbcoll.find({'status': 'Error'}).count()
-        print('Updated in db - success :', cLoaded, '. Error: ', cErrors)
-    except Exception as e:
-        sec = 0.25*60
-        current_time = datetime.now().time() 
-        print ('[', current_time.isoformat(), '] Going to sleep ', sec/60.0, ' minutes!\nException : ', e)
-        time.sleep(sec)
-        print ('Waking up!')
-        #raise
+#    except Exception as e:
+#        sec = 0.25*60
+#        current_time = datetime.now().time() 
+#        print ('[', current_time.isoformat(), '] Going to sleep ', sec/60.0, ' minutes!\nException : ', e)
+#        time.sleep(sec)
+#        print ('Waking up!')
+#        raise
+#        #raise
 
 print ("Finished!")
 
