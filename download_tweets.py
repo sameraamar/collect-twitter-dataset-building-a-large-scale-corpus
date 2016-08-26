@@ -147,7 +147,7 @@ dbcoll = db.posts
 
 
 while True:
-    cursor = dbcoll.find({'status':"New"}).sort([('_id', pymongo.ASCENDING)]).skip(1).limit(100)
+    cursor = dbcoll.find({'status':"New"}).sort([('_id', pymongo.ASCENDING)]).limit(100)
     
     idlist = []
     for c in cursor:
@@ -160,13 +160,12 @@ while True:
         c = get_tweets_bulk(apis[switch], idlist, dbcoll)
         cLoaded = dbcoll.find({'status': 'Loaded'}).count()
         cErrors = dbcoll.find({'status': 'Error'}).count()
-        print('Updated in db - success :', cLoaded, '. Error: ', cErrors)
+        print(USERS[switch],',',min(idlist),'..',max(idlist),'. ', end="")
+        print('success :', cLoaded, ' Error: ', cErrors)
         
     except (RateLimitError , TweepError ) as e:
         
-        if (type(e) == TweepError and str(e)[-3:] == '429')         \
-            or isinstance(e, RateLimitError)      \
-           :
+        if (type(e) == TweepError and str(e)[-3:] == '429') or isinstance(e, RateLimitError):
             errors[switch] = time.time()
             if abs(errors[-1] - errors[0]) < 2:
                 print('Too much failures... go to sleep! ', time.ctime())
