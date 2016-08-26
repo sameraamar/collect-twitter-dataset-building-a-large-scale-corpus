@@ -120,6 +120,7 @@ def get_tweets_bulk(twapi, idlist, dbcollection):
 #%%
    
 switch=0
+USERS=[ 'USER1', 'USER2', 'USER3', 'USER4', 'USER5', 'USER6' ]
 errors = [0]*len(USERS)
 apis = [None]*len(USERS)
 
@@ -146,6 +147,8 @@ dbcoll = db.posts
 
 
 while True:
+    cursor = dbcoll.find({'status':"New"}).sort([('_id', pymongo.ASCENDING)]).skip(1).limit(100)
+    
     idlist = []
     for c in cursor:
         idlist.append( c['_id'])
