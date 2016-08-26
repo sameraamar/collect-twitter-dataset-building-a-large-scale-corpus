@@ -172,7 +172,7 @@ while True:
                 time.sleep(60*3)
                 errors = [0]*len(USERS)
             
-            print('.', end="")
+            print('Rate Limit reached , switching a user...')
             # need to implement a fallback plan (use a different user)
             switch = (switch+1) % len(USERS)
             
@@ -190,16 +190,6 @@ while True:
             print (e)
             raise
             
-    
-
-#    except Exception as e:
-#        sec = 0.25*60
-#        current_time = datetime.now().time() 
-#        print ('[', current_time.isoformat(), '] Going to sleep ', sec/60.0, ' minutes!\nException : ', e)
-#        time.sleep(sec)
-#        print ('Waking up!')
-#        raise
-#        #raise
 
 print ("Finished!")
 
