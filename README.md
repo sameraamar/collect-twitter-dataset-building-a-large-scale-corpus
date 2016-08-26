@@ -52,6 +52,11 @@ Results (from Aug-2016):
 
 * All IDs
 
+Prerequisites:
+--------------
+* tweepy python package
+* pymongo python package for mongodb management
+
 Note:
 -------
 You are not allowed to publish dataset of twitter without a formal permission. You are also not allowed to keep the data of twitter for longer than 24h.
