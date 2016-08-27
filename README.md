@@ -1,6 +1,9 @@
+Collect tweets for the dataset of "Building a large scale corpus..." 
+==================================
+
 A code in python to collect tweets 
 By Samer Aamar
-==================================
+
 
 Dataset Citation:
 -----------------
