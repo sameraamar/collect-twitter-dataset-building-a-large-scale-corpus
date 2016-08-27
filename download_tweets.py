@@ -47,8 +47,6 @@ def load_config(user='DEFAULT'):
 
 import tweepy
 
-start_line = 0
-
 def get_tweet_id(line):
     '''
     Extracts and returns tweet ID from a line in the input.
@@ -104,24 +102,32 @@ def get_tweets_bulk(twapi, idlist, dbcollection):
     bulk = dbcollection.initialize_unordered_bulk_op()
     tweets = get_tweet_list(twapi, idlist)
     
+    updates = {}
+       
+    
     for t in idlist:
         t = int(t)
-        bulk.find({'_id': t}).update({'$set': {'status': 'Error'}})
+        updates[t] = {'$set': {'status': 'Error'}}
+        #bulk.find({'_id': t}).update({'$set': {'status': 'Error'}})
         
     for t in tweets:
         #j = json.dumps(t._json)
         j = t._json
         tid = j['id']
-        bulk.find({'_id': tid}).update({'$set': {'json': j, 'status': 'Loaded'}})
-        #bulk.find({'_id': tid}).update({'$set': {'status': 'Loaded'}})
+        updates[tid] = {'$set': {'json': j, 'status': 'Loaded'}}
+        #bulk.find({'_id': tid}).update({'$set': {'json': j, 'status': 'Loaded'}})
+    
+    for u in updates:
+        bulk.find({'_id': u}).update(updates[u])
     
     bulk.execute()
     return len(tweets)
 #%%
-   
-switch=0
+
 USERS=[ 'USER1', 'USER2', 'USER3', 'USER4', 'USER5', 'USER6' ]
-errors = [0]*len(USERS)
+switch=0
+
+errors = [x*2 for x in range(len(USERS))]
 apis = [None]*len(USERS)
 
 
@@ -135,6 +141,7 @@ if apis[switch] == None:
     #apis[switch] = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
 
 #%%
+import sys
 from pymongo import MongoClient
 import time, pymongo
 from tweepy import TweepError, RateLimitError
@@ -145,9 +152,20 @@ client = MongoClient(host, int(port))
 db = client.events2012
 dbcoll = db.posts
 
+#*****
+node = 0
+if len(sys.argv) > 1:
+    node = int(sys.argv[2])
+    if node < 0:
+        node = 0
+        
+skip = 1000 * node
+print("In the query i wil skip ", skip)
+
+#*****
 
 while True:
-    cursor = dbcoll.find({'status':"New"}).sort([('_id', pymongo.ASCENDING)]).limit(100)
+    cursor = dbcoll.find({'status':"New"}).sort([('_id', pymongo.ASCENDING)]).skip(skip).limit(100)
     
     idlist = []
     for c in cursor:
