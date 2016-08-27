@@ -144,7 +144,6 @@ if apis[switch] == None:
 import sys
 from pymongo import MongoClient
 import time, pymongo
-from numpy import mean
 from tweepy import TweepError, RateLimitError
 
 client = MongoClient(host, int(port))
@@ -191,8 +190,8 @@ while True:
         if (type(e) == TweepError and str(e)[-3:] == '429') or isinstance(e, RateLimitError):
             errors[switch] = time.time()
             
-            m = mean(errors )
-            delta = [abs(x-m) for x in errors]
+            delta = [errors[i]-errors[i-1] for i  in range(1,len(errors))]
+
             if max(delta) < 2:
                 print('Too much failures... go to sleep! ', time.ctime())
                 time.sleep(60*3)
