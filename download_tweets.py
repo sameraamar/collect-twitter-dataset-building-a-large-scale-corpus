@@ -11,7 +11,7 @@ Created on Sun Aug 14 11:32:02 2016
 
 import configparser
 
-CONF_INI_FILE = 'c:/temp/conf.ini'
+CONF_INI_FILE = 'c:/data/conf.ini'
 
 #conf.ini should look like this (in c:/temp folder)
 #[DEFAULT]
@@ -43,7 +43,17 @@ def load_config(user='DEFAULT'):
     return consumer_key, consumer_secret, access_key, access_secret, host, port
 
 #%%
+import time
 
+times =  {
+        'mongodb' : 0.0, 
+        'count1' : 0,
+        'twitter' : 0.0,
+        'count2' : 0
+    }
+
+
+#%%
 
 import tweepy
 
@@ -95,37 +105,74 @@ def get_tweet_list(twapi, idlist):
     #for tweet in tweets:
     #    print('%s,%s' % (tweet.id, tweet.text.encode('UTF-8')))
 
-def get_tweets_bulk(twapi, idlist, dbcollection):
+def get_tweets_bulk(twapi, idlist, dball_ids, dbposts, dberrors):
+    
     if len(idlist)==0:
         return 
+
+    global times
         
-    bulk = dbcollection.initialize_unordered_bulk_op()
+    starttime = time.time()
     tweets = get_tweet_list(twapi, idlist)
+
+    bulk1 = dball_ids.initialize_unordered_bulk_op()
+    bulk2 = dbposts.initialize_unordered_bulk_op()
+    bulk3 = dberrors.initialize_unordered_bulk_op()
+
+    times['twitter'] += time.time() - starttime
+    times['count2'] += 1
     
-    updates = {}
+    
+    newstatus = {}
        
-    
+    starttime = time.time()
     for t in idlist:
         t = int(t)
-        updates[t] = {'$set': {'status': 'Error'}}
+        newstatus[t] = 'Error'
         #bulk.find({'_id': t}).update({'$set': {'status': 'Error'}})
         
     for t in tweets:
         #j = json.dumps(t._json)
         j = t._json
         tid = j['id']
-        updates[tid] = {'$set': {'json': j, 'status': 'Loaded'}}
+        newstatus[tid] = 'Loaded'
+        bulk2.insert({'_id': tid, 'json': j})
         #bulk.find({'_id': tid}).update({'$set': {'json': j, 'status': 'Loaded'}})
     
-    for u in updates:
-        bulk.find({'_id': u}).update(updates[u])
+    for u in newstatus:
+        if newstatus[u] == 'Error':
+            bulk3.insert({'_id':u, 'user_id':'Error'})
+        #bulk1.find({'_id': u}).update( {'$set': {'status':  newstatus[u]}} )
+        bulk1.find({'_id': u}).remove()
     
-    bulk.execute()
+    bulk2.execute()
+    bulk3.execute()
+    bulk1.execute()
+    
+    times['mongodb'] += time.time() - starttime
+    times['count1'] += 1
+
     return len(tweets)
 #%%
+import sys
 
-USERS=[ 'USER1', 'USER2', 'USER3', 'USER4', 'USER5', 'USER6' ]
+USERS=[ 'USER1', 'USER2', 'USER3', 'USER4', 'USER5', 'USER6', 'USER7' ]
 switch=0
+
+
+#*****
+node = 0
+if len(sys.argv) > 1:
+    node = int(sys.argv[2])
+    if node < 0:
+        node = 0
+        
+    switch = node % len(USERS)
+        
+skip = 1000 * node
+print("In the query i wil skip ", skip)
+
+#*****
 
 errors = [x*2 for x in range(len(USERS))]
 apis = [None]*len(USERS)
@@ -137,11 +184,10 @@ if apis[switch] == None:
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
     auth.set_access_token(access_key, access_secret)
     #
-    apis[switch] = tweepy.API(auth)
-    #apis[switch] = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
+    #apis[switch] = tweepy.API(auth)
+    apis[switch] = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
 
 #%%
-import sys
 from pymongo import MongoClient
 import time, pymongo
 from tweepy import TweepError, RateLimitError
@@ -149,42 +195,47 @@ from tweepy import TweepError, RateLimitError
 client = MongoClient(host, int(port))
 #client = MongoClient("mongodb://"+host+":"+port)
 
-db = client.events2012
-dbcoll = db.posts
-
-#*****
-node = 0
-if len(sys.argv) > 1:
-    node = int(sys.argv[2])
-    if node < 0:
-        node = 0
-        
-skip = 1000 * node
-print("In the query i wil skip ", skip)
-
-#*****
+db = client['events2012-a']
+coll_posts = db.posts
+coll_ids = db.ids
+coll_errors = db.errors
 
 itr = 0
 while True:
-    cursor = dbcoll.find({'status':"New"}).sort([('_id', pymongo.ASCENDING)]).skip(skip).limit(100)
+    times =  {
+        'mongodb' : 0.0, 
+        'count1' : 0,
+        'twitter' : 0.0,
+        'count2' : 0
+    }    
+    
+    startgloabl = starttime = time.time()
+    cursor = coll_ids.find({}).sort([('_id', pymongo.ASCENDING)]).skip(skip).limit(100)
     
     itr += 1
     idlist = []
     for c in cursor:
         idlist.append( c['_id'])
         
+    times['mongodb'] += time.time() - starttime
+    times['count1'] += 1
     if len(idlist) == 0:
         break
     
     try:
-        bulk_res = get_tweets_bulk(apis[switch], idlist, dbcoll)
+        bulk_res = get_tweets_bulk(apis[switch], idlist, coll_ids, coll_posts, coll_errors)
 
         print(USERS[switch],',',min(idlist),'..',max(idlist),'. ')
         if itr%10==0:
-            cLoaded = dbcoll.find({'status': 'Loaded'}).count()
-            cErrors = dbcoll.find({'status': 'Error'}).count()        
-            print('\tsuccess :', cLoaded, ' Error: ', cErrors)
-        
+            cLoaded = coll_posts.find({}).count()
+            cErrors = coll_errors.find({}).count()      
+            print('\tleft: ', coll_ids.find({}).count(), 'success :', cLoaded, ' Error: ', cErrors, end='')
+
+                
+        print('\tmongodb avg: ', "%.2f" % (times['mongodb'] ), end=', ')
+        print('twitter avg: ', "%.2f" % (times['twitter']  ), end=', ')
+        print('global time: ', "%.2f" % ((time.time()-startgloabl) ))
+
     except (RateLimitError , TweepError ) as e:
         
         if (type(e) == TweepError and str(e)[-3:] == '429') or isinstance(e, RateLimitError):
@@ -208,13 +259,21 @@ while True:
                 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
                 auth.set_access_token(access_key, access_secret)
                 #
-                apis[switch] = tweepy.API(auth)
+                apis[switch] = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
                 
 
         else:
             print (e)
-            raise
-            
+            print ("Tweepy error! go to sleep 5 minutes")
+            time.sleep(5*60)
+        
+        pass
+
+    except Exception as e:
+        print (e)
+        print ("Some exception happened! go to sleep 5 minutes")
+        time.sleep(5*60)
+                
 
 print ("Finished!")
 
@@ -222,7 +281,8 @@ print ("Finished!")
 
 reset = False
 if reset:
-    dbcoll.update_many({'status': 'Error'}, {'$set': {'status': 'New'}}) #find({'status': 'Error'})
+    coll_ids.update_many({'status': 'Error'}, {'$set': {'status': 'New'}}) #find({'status': 'Error'})
+    #coll_.update_many({'status': 'Error'}, {'$set': {'status': 'New'}}) #find({'status': 'Error'})
 #for e in errors:
 #    e.update
 
