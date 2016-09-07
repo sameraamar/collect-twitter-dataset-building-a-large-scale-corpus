@@ -56,6 +56,7 @@ times =  {
 #%%
 
 import tweepy
+from pymongo.errors import BulkWriteError
 
 def get_tweet_id(line):
     '''
@@ -105,6 +106,20 @@ def get_tweet_list(twapi, idlist):
     #for tweet in tweets:
     #    print('%s,%s' % (tweet.id, tweet.text.encode('UTF-8')))
 
+def commit_bulk(bulk):
+    try:
+        bulk.execute()
+    except BulkWriteError as bwe:
+        #print(bwe.details)
+        werrors = bwe.details['writeErrors']
+        dup = 0
+        for rrr in werrors: 
+            if rrr['code']==11000:
+                dup+=1
+            print(rrr)
+        if len(dup) != len(werrors):
+            raise
+
 def get_tweets_bulk(twapi, idlist, dball_ids, dbposts, dberrors):
     
     if len(idlist)==0:
@@ -136,7 +151,9 @@ def get_tweets_bulk(twapi, idlist, dball_ids, dbposts, dberrors):
         j = t._json
         tid = j['id']
         newstatus[tid] = 'Loaded'
-        bulk2.insert({'_id': tid, 'json': j})
+        temp = {'_id': tid, 'json': j}
+        bulk2.find({'_id': tid}).replace_one(temp)
+        #bulk2.insert(temp)
         #bulk.find({'_id': tid}).update({'$set': {'json': j, 'status': 'Loaded'}})
     
     for u in newstatus:
@@ -145,10 +162,10 @@ def get_tweets_bulk(twapi, idlist, dball_ids, dbposts, dberrors):
         #bulk1.find({'_id': u}).update( {'$set': {'status':  newstatus[u]}} )
         bulk1.find({'_id': u}).remove()
     
-    bulk2.execute()
-    bulk3.execute()
-    bulk1.execute()
-    
+    commit_bulk(bulk2)
+    commit_bulk(bulk3)
+    commit_bulk(bulk1)
+
     times['mongodb'] += time.time() - starttime
     times['count1'] += 1
 
