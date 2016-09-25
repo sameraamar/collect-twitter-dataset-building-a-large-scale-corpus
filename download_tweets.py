@@ -117,7 +117,7 @@ def commit_bulk(bulk):
             if rrr['code']==11000:
                 dup+=1
             print(rrr)
-        if len(dup) != len(werrors):
+        if dup != len(werrors):
             raise
 
 def get_tweets_bulk(twapi, idlist, dball_ids, dbposts, dberrors):
@@ -152,8 +152,9 @@ def get_tweets_bulk(twapi, idlist, dball_ids, dbposts, dberrors):
         tid = j['id']
         newstatus[tid] = 'Loaded'
         temp = {'_id': tid, 'json': j}
-        bulk2.find({'_id': tid}).replace_one(temp)
-        #bulk2.insert(temp)
+        #bulk2.find({'_id': tid}).replace_one(temp)
+        #bulk2.find({'_id': tid}).update({'$set': {'json': j, 'status': 'Loaded'}})
+        bulk2.insert(temp)
         #bulk.find({'_id': tid}).update({'$set': {'json': j, 'status': 'Loaded'}})
     
     for u in newstatus:
@@ -201,8 +202,8 @@ if apis[switch] == None:
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
     auth.set_access_token(access_key, access_secret)
     #
-    #apis[switch] = tweepy.API(auth)
-    apis[switch] = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
+    apis[switch] = tweepy.API(auth)
+    #apis[switch] = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
 
 #%%
 from pymongo import MongoClient
@@ -276,6 +277,7 @@ while True:
                 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
                 auth.set_access_token(access_key, access_secret)
                 #
+                apis[switch] = tweepy.API(auth)
                 apis[switch] = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
                 
 
