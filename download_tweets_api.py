@@ -87,5 +87,6 @@ if __name__ == "__main__":
     file = open('c:/temp/my_tweets.txt', 'w')
     for tweet in tweets:
         file.write(str( tweet._json))
+        file.write('\n')
 
     file.close()
